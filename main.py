@@ -1,5 +1,6 @@
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
+import json
 
 from chirpstack_api import integration
 from chirpstack_api import api
@@ -16,11 +17,8 @@ def load_dev_euis():
 CHIRPSTACK_SERVER = "49.232.192.237:18080"
 API_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJjaGlycHN0YWNrIiwiaXNzIjoiY2hpcnBzdGFjayIsInN1YiI6IjQyOTVmNTUxLTU5YzEtNGIwOS1iMmRhLTBkNjFmYTQ2YmI1NiIsInR5cCI6ImtleSJ9.cgiNxrWfEuPjgwHOQs6t_wrXzH0q7vC_NoN42Y68r4Q"
 
-# 目标转发设备
-TARGET_DEVICES = [
-    "aabbccdd00000002",
-    "aabbccdd00000003"
-]
+# 加载所有交通灯的DEV_EUI
+TRAFFIC_LIGHTS = load_dev_euis()['traffic_lights']
 
 # 创建 gRPC 通道和客户端
 channel = grpc.insecure_channel(CHIRPSTACK_SERVER)
@@ -37,7 +35,6 @@ def send_downlink(dev_eui, data_bytes):
     resp = client.Enqueue(req, metadata=auth_token)
     print(f"下行已发送给 {dev_eui}, downlink ID: {resp.id}")
 
-
 # HTTP 事件处理服务
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
@@ -52,12 +49,13 @@ class Handler(BaseHTTPRequestHandler):
             dev_eui = body_json.get("deviceInfo", {}).get("devEui", "")
             data_hex = body_json.get("data", "")
             print(f"收到上行：设备 {dev_eui}, 数据: {data_hex}")
-
-            # 判断是否是 aabbccdd00000001 发来的上行
-            if dev_eui == "aabbccdd00000001":
-                print("触发数据转发逻辑...")
-                for target in TARGET_DEVICES:
-                    send_downlink(target, bytes([0x05, 0x05]))
+            
+            # 解析设备位置
+            direction = "顺行" if dev_eui[0] == "1" else "逆行"
+            position = "左侧" if dev_eui[1] == "1" else "右侧"
+            number = int(dev_eui[-4:])  # 取最后4位作为序号
+            print(f"收到{direction}{position}第{number}号灯的上行数据")
+            # 这里可以添加交通灯控制逻辑
 
         self.send_response(200)
         self.end_headers()
@@ -65,6 +63,6 @@ class Handler(BaseHTTPRequestHandler):
 
 # 启动 HTTP 服务
 if __name__ == '__main__':
-    server = HTTPServer(('0.0.0.0', 8091), Handler)
-    print("HTTP Server running at port 8091...")
+    server = HTTPServer(('0.0.0.0', 10088), Handler)
+    print("HTTP Server running at port 10088...")
     server.serve_forever()
