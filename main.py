@@ -26,17 +26,120 @@ client = api.DeviceServiceStub(channel)
 auth_token = [("authorization", f"Bearer {API_TOKEN}")]
 
 # 下行发送函数
-def send_downlink(dev_eui, data_bytes):
+def send_downlink(dev_eui, f_port, data_bytes=None):
+    """
+    发送下行控制命令
+    :param dev_eui: 设备EUI
+    :param f_port: 端口号,根据协议规范：
+        10: 设置闪烁频率
+        11: 设置LED颜色
+        12: 设置是否闪烁
+        13: 设置亮度
+        20: 车辆通过状态（红色+7000亮度+120Hz)
+        21: 车辆离开状态（黄色+1000亮度+常亮）
+    :param data_bytes: 数据载荷,对于f_port=20/21可以为None
+    """
     req = api.EnqueueDeviceQueueItemRequest()
     req.queue_item.dev_eui = dev_eui
-    req.queue_item.data = data_bytes
+    req.queue_item.f_port = f_port
     req.queue_item.confirmed = False
-    req.queue_item.f_port = 10
+    
+    if data_bytes is not None:
+        req.queue_item.data = data_bytes
+    
     resp = client.Enqueue(req, metadata=auth_token)
-    print(f"下行已发送给 {dev_eui}, downlink ID: {resp.id}")
+    print(f"下行已发送给 {dev_eui}, fPort={f_port}, downlink ID: {resp.id}")
+    return resp.id
 
 # HTTP 事件处理服务
 class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        parsed_path = urlparse(self.path)
+        path = parsed_path.path
+        params = parse_qs(parsed_path.query)
+        
+        # 获取设备EUI
+        dev_eui = params.get('ip', [''])[0]
+        if not dev_eui:
+            self._send_response(400, "缺少设备EUI参数")
+            return
+            
+        # 根据不同的路径处理不同的请求
+        if path == '/equipment/setLevel':
+            level = params.get('level', [''])[0]
+            if not level:
+                self._send_response(400, "缺少亮度参数")
+                return
+            try:
+                level = int(level)
+                # 将亮度值转换为大端序的2字节
+                high_byte = (level >> 8) & 0xFF
+                low_byte = level & 0xFF
+                data = bytes([0x04, high_byte, low_byte])
+                # downlink_id = send_downlink(dev_eui, 13, data)
+                # self._send_response(200, f"设置亮度成功，亮度值：{level}，下行ID：{downlink_id}")
+                self._send_response(200, f"设置亮度成功，亮度值：{level}")
+            except ValueError:
+                self._send_response(400, "亮度参数必须是数字")
+                
+        elif path == '/equipment/setFrequency':
+            frequency = params.get('frequency', [''])[0]
+            if not frequency:
+                self._send_response(400, "缺少频率参数")
+                return
+            try:
+                frequency = int(frequency)
+                if frequency not in [30, 60, 120]:
+                    self._send_response(400, "频率必须是30、60或120")
+                    return
+                # 将频率转换为对应的十六进制值
+                freq_map = {30: 0x1E, 60: 0x3C, 120: 0x78}
+                data = bytes([0x01, freq_map[frequency]])
+                # downlink_id = send_downlink(dev_eui, 10, data)
+                # self._send_response(200, f"设置频率成功，频率值：{frequency}Hz，下行ID：{downlink_id}")
+                self._send_response(200, f"设置频率成功，频率值：{frequency}Hz")
+            except ValueError:
+                self._send_response(400, "频率参数必须是数字")
+                
+        elif path == '/equipment/setColor':
+            color = params.get('color', [''])[0]
+            if not color:
+                self._send_response(400, "缺少颜色参数")
+                return
+            try:
+                color = int(color)
+                if color not in [0, 1]:
+                    self._send_response(400, "颜色参数必须是0(红色)或1(黄色)")
+                    return
+                data = bytes([0x02, color])
+                downlink_id = send_downlink(dev_eui, 11, data)
+                color_name = "红色" if color == 0 else "黄色"
+                # self._send_response(200, f"设置颜色成功，颜色：{color_name}，下行ID：{downlink_id}")
+                self._send_response(200, f"设置颜色成功，颜色：{color_name}")
+            except ValueError:
+                self._send_response(400, "颜色参数必须是数字")
+                
+        elif path == '/equipment/setManner':
+            manner = params.get('manner', [''])[0]
+            if not manner:
+                self._send_response(400, "缺少闪烁方式参数")
+                return
+            try:
+                manner = int(manner)
+                if manner not in [0, 1]:
+                    self._send_response(400, "闪烁方式参数必须是0(闪烁)或1(常亮)")
+                    return
+                data = bytes([0x03, manner])
+                downlink_id = send_downlink(dev_eui, 12, data)
+                manner_name = "闪烁" if manner == 0 else "常亮"
+                # self._send_response(200, f"设置闪烁方式成功，方式：{manner_name}，下行ID：{downlink_id}")
+                self._send_response(200, f"设置闪烁方式成功，方式：{manner_name}")
+            except ValueError:
+                self._send_response(400, "闪烁方式参数必须是数字")
+                
+        else:
+            self._send_response(404, "不支持的请求路径")
+            
     def do_POST(self):
         parsed_path = urlparse(self.path)
         event = parsed_path.query.split("=")[-1]
@@ -55,11 +158,24 @@ class Handler(BaseHTTPRequestHandler):
             position = "左侧" if dev_eui[1] == "1" else "右侧"
             number = int(dev_eui[-4:])  # 取最后4位作为序号
             print(f"收到{direction}{position}第{number}号灯的上行数据")
-            # 这里可以添加交通灯控制逻辑
+            
+            # 示例：当收到上行数据时，设置该灯为"车辆通过"状态
+            # send_downlink(dev_eui, 20)  # 使用fPort=20表示车辆通过状态
 
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"OK")
+        
+    def _send_response(self, code, msg):
+        """发送JSON格式的响应"""
+        response = {
+            "msg": msg,
+            "code": code
+        }
+        self.send_response(code)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps(response).encode())
 
 # 启动 HTTP 服务
 if __name__ == '__main__':
