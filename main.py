@@ -35,6 +35,7 @@ def send_downlink(dev_eui, f_port, data_bytes=None):
         11: 设置LED颜色
         12: 设置是否闪烁
         13: 设置亮度
+        14: 设备开关控制
         20: 车辆通过状态（红色+7000亮度+120Hz)
         21: 车辆离开状态（黄色+1000亮度+常亮）
     :param data_bytes: 数据载荷,对于f_port=20/21可以为None
@@ -76,9 +77,9 @@ class Handler(BaseHTTPRequestHandler):
                 high_byte = (level >> 8) & 0xFF
                 low_byte = level & 0xFF
                 data = bytes([0x04, high_byte, low_byte])
-                # downlink_id = send_downlink(dev_eui, 13, data)
-                # self._send_response(200, f"设置亮度成功，亮度值：{level}，下行ID：{downlink_id}")
-                self._send_response(200, f"设置亮度成功，亮度值：{level}")
+                downlink_id = send_downlink(dev_eui, 13, data)
+                self._send_response(200, f"设置亮度成功，亮度值：{level}，下行ID：{downlink_id}")
+                # self._send_response(200, f"设置亮度成功，亮度值：{level}")
             except ValueError:
                 self._send_response(400, "亮度参数必须是数字")
                 
@@ -95,9 +96,9 @@ class Handler(BaseHTTPRequestHandler):
                 # 将频率转换为对应的十六进制值
                 freq_map = {30: 0x1E, 60: 0x3C, 120: 0x78}
                 data = bytes([0x01, freq_map[frequency]])
-                # downlink_id = send_downlink(dev_eui, 10, data)
-                # self._send_response(200, f"设置频率成功，频率值：{frequency}Hz，下行ID：{downlink_id}")
-                self._send_response(200, f"设置频率成功，频率值：{frequency}Hz")
+                downlink_id = send_downlink(dev_eui, 10, data)
+                self._send_response(200, f"设置频率成功，频率值：{frequency}Hz，下行ID：{downlink_id}")
+                # self._send_response(200, f"设置频率成功，频率值：{frequency}Hz")
             except ValueError:
                 self._send_response(400, "频率参数必须是数字")
                 
@@ -114,8 +115,8 @@ class Handler(BaseHTTPRequestHandler):
                 data = bytes([0x02, color])
                 downlink_id = send_downlink(dev_eui, 11, data)
                 color_name = "红色" if color == 0 else "黄色"
-                # self._send_response(200, f"设置颜色成功，颜色：{color_name}，下行ID：{downlink_id}")
-                self._send_response(200, f"设置颜色成功，颜色：{color_name}")
+                self._send_response(200, f"设置颜色成功，颜色：{color_name}，下行ID：{downlink_id}")
+                # self._send_response(200, f"设置颜色成功，颜色：{color_name}")
             except ValueError:
                 self._send_response(400, "颜色参数必须是数字")
                 
@@ -132,10 +133,33 @@ class Handler(BaseHTTPRequestHandler):
                 data = bytes([0x03, manner])
                 downlink_id = send_downlink(dev_eui, 12, data)
                 manner_name = "闪烁" if manner == 0 else "常亮"
-                # self._send_response(200, f"设置闪烁方式成功，方式：{manner_name}，下行ID：{downlink_id}")
-                self._send_response(200, f"设置闪烁方式成功，方式：{manner_name}")
+                self._send_response(200, f"设置闪烁方式成功，方式：{manner_name}，下行ID：{downlink_id}")
+                # self._send_response(200, f"设置闪烁方式成功，方式：{manner_name}")
             except ValueError:
                 self._send_response(400, "闪烁方式参数必须是数字")
+                
+        elif path == '/equipment/setStatus':
+            status = params.get('status', [''])[0]
+            if not status:
+                self._send_response(400, "缺少状态参数")
+                return
+            try:
+                status = int(status)
+                if status not in [0, 1]:
+                    self._send_response(400, "状态参数必须是0(关闭)或1(开启)")
+                    return
+                    
+                # 根据状态发送开关命令
+                if status == 1:  # 开启
+                    data = bytes([0x05, 0x01])  # 开启命令
+                    downlink_id = send_downlink(dev_eui, 14, data)
+                    self._send_response(200, f"开启成功，下行ID：{downlink_id}")
+                else:  # 关闭
+                    data = bytes([0x05, 0x00])  # 关闭命令
+                    downlink_id = send_downlink(dev_eui, 14, data)
+                    self._send_response(200, f"关闭成功，下行ID：{downlink_id}")
+            except ValueError:
+                self._send_response(400, "状态参数必须是数字")
                 
         else:
             self._send_response(404, "不支持的请求路径")
