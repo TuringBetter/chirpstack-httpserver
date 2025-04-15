@@ -36,9 +36,10 @@ def send_downlink(dev_eui, f_port, data_bytes=None):
         12: 设置是否闪烁
         13: 设置亮度
         14: 设备开关控制
+        15: 延迟测量响应
         20: 车辆通过状态（红色+7000亮度+120Hz)
         21: 车辆离开状态（黄色+1000亮度+常亮）
-    :param data_bytes: 数据载荷,对于f_port=20/21可以为None
+    :param data_bytes: 数据载荷,对于f_port=15/20/21可以为None
     """
     req = api.EnqueueDeviceQueueItemRequest()
     req.queue_item.dev_eui = dev_eui
@@ -175,7 +176,15 @@ class Handler(BaseHTTPRequestHandler):
         if event == "up":
             dev_eui = body_json.get("deviceInfo", {}).get("devEui", "")
             data_hex = body_json.get("data", "")
-            print(f"收到上行：设备 {dev_eui}, 数据: {data_hex}")
+            f_port = body_json.get("fPort", 0)
+            print(f"收到上行：设备 {dev_eui}, fPort={f_port}, 数据: {data_hex}")
+            
+            # 处理延迟测量请求
+            if f_port == 15:
+                # 立即发送响应
+                downlink_id = send_downlink(dev_eui, 15)
+                print(f"已发送延迟测量响应，下行ID：{downlink_id}")
+                return
             
             # 解析设备位置
             direction = "顺行" if dev_eui[0] == "1" else "逆行"
