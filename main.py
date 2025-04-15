@@ -60,9 +60,9 @@ class Handler(BaseHTTPRequestHandler):
         params = parse_qs(parsed_path.query)
         
         # 获取设备EUI
-        dev_eui = params.get('ip', [''])[0]
+        dev_eui = params.get('DevEUI', [''])[0]
         if not dev_eui:
-            self._send_response(400, "缺少设备EUI参数")
+            self._send_response(400, "缺少设备DevEUI参数")
             return
             
         # 根据不同的路径处理不同的请求
