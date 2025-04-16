@@ -7,62 +7,73 @@
 - 使用 LoRaWAN 下行数据帧传输控制指令
 - `fPort` 用于区分指令类型
 - `payload` 为二进制格式数据，终端解析后执行控制
+- 支持单个设备控制和组播控制
 
 ---
 
 ## HTTP接口说明
 
 ### 1. 设置亮度
-- 请求格式：`GET /equipment/setLevel?DevEUI=<设备EUI>&level=<亮度值>`
-- 示例：`GET /equipment/setLevel?DevEUI=1100000000000001&level=7000`
+- 请求格式：`GET /equipment/setLevel?DevEUI=<设备EUI>&level=<亮度值>` 或 `GET /equipment/setLevel?ip=<IP地址>&level=<亮度值>`
+- 示例：
+  - 单个设备：`GET /equipment/setLevel?DevEUI=1100000000000001&level=7000`
+  - 组播控制：`GET /equipment/setLevel?ip=192.168.1.1&level=7000`
 - 响应格式：
 ```json
 {
-    "msg": "设置亮度成功，亮度值：7000，下行ID：xxx",
+    "msg": "设置亮度成功，亮度值：7000，下行ID：[xxx, xxx, xxx]",
     "code": 200
 }
 ```
 
 ### 2. 设置频率
-- 请求格式：`GET /equipment/setFrequency?DevEUI=<设备EUI>&frequency=<频率值>`
-- 示例：`GET /equipment/setFrequency?DevEUI=1100000000000001&frequency=60`
+- 请求格式：`GET /equipment/setFrequency?DevEUI=<设备EUI>&frequency=<频率值>` 或 `GET /equipment/setFrequency?ip=<IP地址>&frequency=<频率值>`
+- 示例：
+  - 单个设备：`GET /equipment/setFrequency?DevEUI=1100000000000001&frequency=60`
+  - 组播控制：`GET /equipment/setFrequency?ip=192.168.1.1&frequency=60`
 - 响应格式：
 ```json
 {
-    "msg": "设置频率成功，频率值：60Hz，下行ID：xxx",
+    "msg": "设置频率成功，频率值：60Hz，下行ID：[xxx, xxx, xxx]",
     "code": 200
 }
 ```
 
 ### 3. 设置颜色
-- 请求格式：`GET /equipment/setColor?DevEUI=<设备EUI>&color=<颜色值>`
-- 示例：`GET /equipment/setColor?DevEUI=1100000000000001&color=0`
+- 请求格式：`GET /equipment/setColor?DevEUI=<设备EUI>&color=<颜色值>` 或 `GET /equipment/setColor?ip=<IP地址>&color=<颜色值>`
+- 示例：
+  - 单个设备：`GET /equipment/setColor?DevEUI=1100000000000001&color=0`
+  - 组播控制：`GET /equipment/setColor?ip=192.168.1.1&color=0`
 - 响应格式：
 ```json
 {
-    "msg": "设置颜色成功，颜色：红色，下行ID：xxx",
+    "msg": "设置颜色成功，颜色：红色，下行ID：[xxx, xxx, xxx]",
     "code": 200
 }
 ```
 
 ### 4. 设置闪烁方式
-- 请求格式：`GET /equipment/setManner?DevEUI=<设备EUI>&manner=<方式值>`
-- 示例：`GET /equipment/setManner?DevEUI=1100000000000001&manner=0`
+- 请求格式：`GET /equipment/setManner?DevEUI=<设备EUI>&manner=<方式值>` 或 `GET /equipment/setManner?ip=<IP地址>&manner=<方式值>`
+- 示例：
+  - 单个设备：`GET /equipment/setManner?DevEUI=1100000000000001&manner=0`
+  - 组播控制：`GET /equipment/setManner?ip=192.168.1.1&manner=0`
 - 响应格式：
 ```json
 {
-    "msg": "设置闪烁方式成功，方式：闪烁，下行ID：xxx",
+    "msg": "设置闪烁方式成功，方式：闪烁，下行ID：[xxx, xxx, xxx]",
     "code": 200
 }
 ```
 
 ### 5. 设备开关控制
-- 请求格式：`GET /equipment/setStatus?DevEUI=<设备EUI>&status=<状态值>`
-- 示例：`GET /equipment/setStatus?DevEUI=1100000000000001&status=0`
+- 请求格式：`GET /equipment/setStatus?DevEUI=<设备EUI>&status=<状态值>` 或 `GET /equipment/setStatus?ip=<IP地址>&status=<状态值>`
+- 示例：
+  - 单个设备：`GET /equipment/setStatus?DevEUI=1100000000000001&status=0`
+  - 组播控制：`GET /equipment/setStatus?ip=192.168.1.1&status=0`
 - 响应格式：
 ```json
 {
-    "msg": "关闭成功，下行ID：xxx",
+    "msg": "关闭成功，下行ID：[xxx, xxx, xxx]",
     "code": 200
 }
 ```
@@ -75,6 +86,12 @@
     "code": 400
 }
 ```
+
+错误信息包括：
+- 缺少设备DevEUI或IP参数
+- 未找到IP对应的设备
+- 参数格式错误
+- 参数值超出范围
 
 ---
 
@@ -253,5 +270,23 @@
 
 - `fPort=21`
 - `payload=`（无）
+
+---
+
+## IP与设备映射配置
+
+设备与IP的对应关系通过`ip_devices.json`配置文件进行管理，格式如下：
+
+```json
+{
+    "192.168.1.1": [
+        "1100000000000001",
+        "1100000000000002",
+        "1100000000000003"
+    ]
+}
+```
+
+当使用IP参数进行组播控制时，系统会自动控制该IP下配置的所有设备。
 
 ---
