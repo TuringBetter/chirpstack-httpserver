@@ -13,12 +13,19 @@ def load_dev_euis():
     with open('DEV_EUI.json', 'r') as f:
         return json.load(f)
 
+# 从JSON文件加载IP和DEV_EUI的对应关系
+def load_ip_devices():
+    with open('ip_devices.json', 'r') as f:
+        return json.load(f)
+
 # 设置 ChirpStack gRPC 接口地址 和 API Token
 CHIRPSTACK_SERVER = "49.232.192.237:18080"
 API_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJjaGlycHN0YWNrIiwiaXNzIjoiY2hpcnBzdGFjayIsInN1YiI6IjQyOTVmNTUxLTU5YzEtNGIwOS1iMmRhLTBkNjFmYTQ2YmI1NiIsInR5cCI6ImtleSJ9.cgiNxrWfEuPjgwHOQs6t_wrXzH0q7vC_NoN42Y68r4Q"
 
 # 加载所有交通灯的DEV_EUI
 TRAFFIC_LIGHTS = load_dev_euis()['traffic_lights']
+# 加载IP和DEV_EUI的对应关系
+IP_DEVICES = load_ip_devices()
 
 # 创建 gRPC 通道和客户端
 channel = grpc.insecure_channel(CHIRPSTACK_SERVER)
@@ -59,11 +66,25 @@ class Handler(BaseHTTPRequestHandler):
         path = parsed_path.path
         params = parse_qs(parsed_path.query)
         
-        # 获取设备EUI
+        # 获取设备EUI或IP
         dev_eui = params.get('DevEUI', [''])[0]
-        if not dev_eui:
-            self._send_response(400, "缺少设备DevEUI参数")
+        ip = params.get('ip', [''])[0]
+        
+        # 如果没有提供DevEUI或IP参数
+        if not dev_eui and not ip:
+            self._send_response(400, "缺少设备DevEUI或IP参数")
             return
+            
+        # 获取目标设备列表
+        target_devices = []
+        if dev_eui:
+            target_devices = [dev_eui]
+        elif ip:
+            if ip in IP_DEVICES:
+                target_devices = IP_DEVICES[ip]
+            else:
+                self._send_response(400, f"未找到IP {ip} 对应的设备")
+                return
             
         # 根据不同的路径处理不同的请求
         if path == '/equipment/setLevel':
@@ -77,8 +98,11 @@ class Handler(BaseHTTPRequestHandler):
                 high_byte = (level >> 8) & 0xFF
                 low_byte = level & 0xFF
                 data = bytes([high_byte, low_byte])
-                downlink_id = send_downlink(dev_eui, 13, data)
-                self._send_response(200, f"设置亮度成功，亮度值：{level}，下行ID：{downlink_id}")
+                downlink_ids = []
+                for dev in target_devices:
+                    downlink_id = send_downlink(dev, 13, data)
+                    downlink_ids.append(downlink_id)
+                self._send_response(200, f"设置亮度成功，亮度值：{level}，下行ID：{downlink_ids}")
             except ValueError:
                 self._send_response(400, "亮度参数必须是数字")
                 
@@ -95,8 +119,11 @@ class Handler(BaseHTTPRequestHandler):
                 # 将频率转换为对应的十六进制值
                 freq_map = {30: 0x1E, 60: 0x3C, 120: 0x78}
                 data = bytes([freq_map[frequency]])
-                downlink_id = send_downlink(dev_eui, 10, data)
-                self._send_response(200, f"设置频率成功，频率值：{frequency}Hz，下行ID：{downlink_id}")
+                downlink_ids = []
+                for dev in target_devices:
+                    downlink_id = send_downlink(dev, 10, data)
+                    downlink_ids.append(downlink_id)
+                self._send_response(200, f"设置频率成功，频率值：{frequency}Hz，下行ID：{downlink_ids}")
             except ValueError:
                 self._send_response(400, "频率参数必须是数字")
                 
@@ -111,9 +138,12 @@ class Handler(BaseHTTPRequestHandler):
                     self._send_response(400, "颜色参数必须是0(红色)或1(黄色)")
                     return
                 data = bytes([color])
-                downlink_id = send_downlink(dev_eui, 11, data)
+                downlink_ids = []
+                for dev in target_devices:
+                    downlink_id = send_downlink(dev, 11, data)
+                    downlink_ids.append(downlink_id)
                 color_name = "红色" if color == 0 else "黄色"
-                self._send_response(200, f"设置颜色成功，颜色：{color_name}，下行ID：{downlink_id}")
+                self._send_response(200, f"设置颜色成功，颜色：{color_name}，下行ID：{downlink_ids}")
             except ValueError:
                 self._send_response(400, "颜色参数必须是数字")
                 
@@ -128,9 +158,12 @@ class Handler(BaseHTTPRequestHandler):
                     self._send_response(400, "闪烁方式参数必须是0(闪烁)或1(常亮)")
                     return
                 data = bytes([manner])
-                downlink_id = send_downlink(dev_eui, 12, data)
+                downlink_ids = []
+                for dev in target_devices:
+                    downlink_id = send_downlink(dev, 12, data)
+                    downlink_ids.append(downlink_id)
                 manner_name = "闪烁" if manner == 0 else "常亮"
-                self._send_response(200, f"设置闪烁方式成功，方式：{manner_name}，下行ID：{downlink_id}")
+                self._send_response(200, f"设置闪烁方式成功，方式：{manner_name}，下行ID：{downlink_ids}")
             except ValueError:
                 self._send_response(400, "闪烁方式参数必须是数字")
                 
@@ -146,14 +179,13 @@ class Handler(BaseHTTPRequestHandler):
                     return
                     
                 # 根据状态发送开关命令
-                if status == 1:  # 开启
-                    data = bytes([0x01])  # 开启命令
-                    downlink_id = send_downlink(dev_eui, 14, data)
-                    self._send_response(200, f"开启成功，下行ID：{downlink_id}")
-                else:  # 关闭
-                    data = bytes([0x00])  # 关闭命令
-                    downlink_id = send_downlink(dev_eui, 14, data)
-                    self._send_response(200, f"关闭成功，下行ID：{downlink_id}")
+                data = bytes([0x01 if status == 1 else 0x00])
+                downlink_ids = []
+                for dev in target_devices:
+                    downlink_id = send_downlink(dev, 14, data)
+                    downlink_ids.append(downlink_id)
+                status_name = "开启" if status == 1 else "关闭"
+                self._send_response(200, f"{status_name}成功，下行ID：{downlink_ids}")
             except ValueError:
                 self._send_response(400, "状态参数必须是数字")
                 
