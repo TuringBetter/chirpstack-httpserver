@@ -8,6 +8,8 @@ from chirpstack_api import api
 from google.protobuf.json_format import Parse
 import grpc
 
+import base64
+
 # 从JSON文件加载DEV_EUI
 def load_dev_euis():
     with open('DEV_EUI.json', 'r') as f:
@@ -204,11 +206,17 @@ class Handler(BaseHTTPRequestHandler):
             dev_eui = body_json.get("deviceInfo", {}).get("devEui", "")
             data_hex = body_json.get("data", "")
             
-            # 解析上行数据
+            # 进行base64解码
             try:
-                data_bytes = bytes.fromhex(data_hex)
-                if len(data_bytes) > 0:
-                    cmd_code = data_bytes[0]
+                decoded_data = base64.b64decode(data_hex)
+                # print(f"要解析的数据：")
+                # print(f"devEui={dev_eui}")
+                # print(f"Base64前：dataHex={data_hex}")
+                # print(f"Base64后：dataHex={[hex(b) for b in decoded_data]}")
+                
+                # 使用解码后的数据
+                if len(decoded_data) > 0:
+                    cmd_code = decoded_data[0]
                     # 处理延迟测量请求 (命令码 0x06)
                     if cmd_code == 0x06:
                         # 立即发送响应，使用相同的命令码
@@ -216,17 +224,15 @@ class Handler(BaseHTTPRequestHandler):
                         downlink_id = send_downlink(dev_eui, 1, data)
                         print(f"已发送延迟测量响应，下行ID：{downlink_id}")
                         return
-            except ValueError:
-                print("无法解析上行数据")
+            except Exception as e:
+                print(f"数据处理错误：{str(e)}")
+                return
             
             # 解析设备位置
             direction = "顺行" if dev_eui[0] == "1" else "逆行"
             position = "左侧" if dev_eui[1] == "1" else "右侧"
             number = int(dev_eui[-4:])  # 取最后4位作为序号
             print(f"收到{direction}{position}第{number}号灯的上行数据")
-            
-            # 示例：当收到上行数据时，设置该灯为"车辆通过"状态
-            # send_downlink(dev_eui, 20)  # 使用fPort=20表示车辆通过状态
 
         self.send_response(200)
         self.end_headers()
