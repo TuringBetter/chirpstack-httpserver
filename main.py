@@ -209,20 +209,31 @@ class Handler(BaseHTTPRequestHandler):
             # 进行base64解码
             try:
                 decoded_data = base64.b64decode(data_hex)
-                # print(f"要解析的数据：")
-                # print(f"devEui={dev_eui}")
-                # print(f"Base64前：dataHex={data_hex}")
-                # print(f"Base64后：dataHex={[hex(b) for b in decoded_data]}")
+                print(f"要解析的数据：")
+                print(f"devEui={dev_eui}")
+                print(f"Base64前：dataHex={data_hex}")
+                print(f"Base64后：dataHex={[hex(b) for b in decoded_data]}")
                 
                 # 使用解码后的数据
                 if len(decoded_data) > 0:
                     cmd_code = decoded_data[0]
+                    
                     # 处理延迟测量请求 (命令码 0x06)
                     if cmd_code == 0x06:
                         # 立即发送响应，使用相同的命令码
                         data = bytes([0x06])
                         downlink_id = send_downlink(dev_eui, 1, data)
                         print(f"已发送延迟测量响应，下行ID：{downlink_id}")
+                        return
+                    # 处理人工报警 (命令码 0x07)
+                    elif cmd_code == 0x07:
+                        print(f"收到来自设备 {dev_eui} 的人工报警")
+                        # 这里可以添加报警处理逻辑，比如记录到数据库、发送通知等
+                        return
+                    # 处理事故报警 (命令码 0x08)
+                    elif cmd_code == 0x08:
+                        print(f"收到来自设备 {dev_eui} 的事故报警")
+                        # 这里可以添加事故处理逻辑，比如记录到数据库、发送通知等
                         return
             except Exception as e:
                 print(f"数据处理错误：{str(e)}")
