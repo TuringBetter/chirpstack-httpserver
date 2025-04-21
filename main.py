@@ -196,64 +196,136 @@ class Handler(BaseHTTPRequestHandler):
             
     def do_POST(self):
         parsed_path = urlparse(self.path)
-        event = parsed_path.query.split("=")[-1]
-
-        length = int(self.headers.get("Content-Length"))
-        body = self.rfile.read(length)
-        body_json = json.loads(body)
-
-        if event == "up":
-            dev_eui = body_json.get("deviceInfo", {}).get("devEui", "")
-            data_hex = body_json.get("data", "")
-            
-            # 进行base64解码
-            try:
-                decoded_data = base64.b64decode(data_hex)
-                print(f"要解析的数据：")
-                print(f"devEui={dev_eui}")
-                print(f"Base64前：dataHex={data_hex}")
-                print(f"Base64后：dataHex={[hex(b) for b in decoded_data]}")
-                
-                # 使用解码后的数据
-                if len(decoded_data) > 0:
-                    cmd_code = decoded_data[0]
-                    
-                    # 处理延迟测量请求 (命令码 0x06)
-                    if cmd_code == 0x06:
-                        # 立即发送响应，使用相同的命令码
-                        data = bytes([0x06])
-                        downlink_id = send_downlink(dev_eui, 1, data)
-                        print(f"已发送延迟测量响应，下行ID：{downlink_id}")
-                        return
-                    # 处理人工报警 (命令码 0x07)
-                    elif cmd_code == 0x07:
-                        print(f"收到来自设备 {dev_eui} 的人工报警")
-                        # 这里可以添加报警处理逻辑，比如记录到数据库、发送通知等
-                        return
-                    # 处理事故报警 (命令码 0x08)
-                    elif cmd_code == 0x08:
-                        print(f"收到来自设备 {dev_eui} 的事故报警")
-                        # 这里可以添加事故处理逻辑，比如记录到数据库、发送通知等
-                        return
-            except Exception as e:
-                print(f"数据处理错误：{str(e)}")
-                return
-            
-            # 解析设备位置
-            direction = "顺行" if dev_eui[0] == "1" else "逆行"
-            position = "左侧" if dev_eui[1] == "1" else "右侧"
-            number = int(dev_eui[-4:])  # 取最后4位作为序号
-            print(f"收到{direction}{position}第{number}号灯的上行数据")
-
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"OK")
+        path = parsed_path.path
         
-    def _send_response(self, code, msg):
+        # 获取请求体
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length)
+        
+        try:
+            commands = json.loads(body)
+            if not isinstance(commands, list):
+                self._send_response(400, "请求体必须是数组格式")
+                return
+                
+            # 根据不同的路径处理不同的请求
+            if path == '/api/induction-lights/set-color':
+                self._handle_set_color(commands)
+            elif path == '/api/induction-lights/set-frequency':
+                self._handle_set_frequency(commands)
+            elif path == '/api/induction-lights/set-level':
+                self._handle_set_level(commands)
+            elif path == '/api/induction-lights/set-manner':
+                self._handle_set_manner(commands)
+            elif path == '/api/induction-lights/set-switch':
+                self._handle_set_switch(commands)
+            else:
+                self._send_response(404, "不支持的请求路径")
+                
+        except json.JSONDecodeError:
+            self._send_response(400, "无效的JSON格式")
+        except Exception as e:
+            self._send_response(500, f"服务器内部错误: {str(e)}")
+            
+    def _handle_set_color(self, commands):
+        """处理设置颜色请求"""
+        for cmd in commands:
+            if not all(k in cmd for k in ['stakeNo', 'color']):
+                self._send_response(400, "缺少必要参数")
+                return
+                
+            if cmd['color'] not in [0, 1]:
+                self._send_response(400, "颜色值必须是0或1")
+                return
+                
+            dev_euis = cmd['stakeNo'].split(',')
+            for dev_eui in dev_euis:
+                data = bytes([cmd['color']])
+                send_downlink(dev_eui, 11, data)
+                
+        self._send_response(200, "Color setting applied successfully.")
+        
+    def _handle_set_frequency(self, commands):
+        """处理设置频率请求"""
+        freq_map = {30: 0x1E, 60: 0x3C, 120: 0x78}
+        
+        for cmd in commands:
+            if not all(k in cmd for k in ['stakeNo', 'frequency']):
+                self._send_response(400, "缺少必要参数")
+                return
+                
+            if cmd['frequency'] not in freq_map:
+                self._send_response(400, "频率值必须是30、60或120")
+                return
+                
+            dev_euis = cmd['stakeNo'].split(',')
+            for dev_eui in dev_euis:
+                data = bytes([freq_map[cmd['frequency']]])
+                send_downlink(dev_eui, 10, data)
+                
+        self._send_response(200, "Frequency setting applied successfully.")
+        
+    def _handle_set_level(self, commands):
+        """处理设置亮度请求"""
+        for cmd in commands:
+            if not all(k in cmd for k in ['stakeNo', 'level']):
+                self._send_response(400, "缺少必要参数")
+                return
+                
+            if cmd['level'] not in [500, 1000, 2000, 4000, 7000]:
+                self._send_response(400, "亮度值必须是500、1000、2000、4000或7000")
+                return
+                
+            dev_euis = cmd['stakeNo'].split(',')
+            for dev_eui in dev_euis:
+                high_byte = (cmd['level'] >> 8) & 0xFF
+                low_byte = cmd['level'] & 0xFF
+                data = bytes([high_byte, low_byte])
+                send_downlink(dev_eui, 13, data)
+                
+        self._send_response(200, "Level setting applied successfully.")
+        
+    def _handle_set_manner(self, commands):
+        """处理设置亮灯方式请求"""
+        for cmd in commands:
+            if not all(k in cmd for k in ['stakeNo', 'manner']):
+                self._send_response(400, "缺少必要参数")
+                return
+                
+            if cmd['manner'] not in [0, 1]:
+                self._send_response(400, "亮灯方式必须是0或1")
+                return
+                
+            dev_euis = cmd['stakeNo'].split(',')
+            for dev_eui in dev_euis:
+                data = bytes([cmd['manner']])
+                send_downlink(dev_eui, 12, data)
+                
+        self._send_response(200, "Manner setting applied successfully.")
+        
+    def _handle_set_switch(self, commands):
+        """处理设置开关请求"""
+        for cmd in commands:
+            if not all(k in cmd for k in ['stakeNo', 'switch']):
+                self._send_response(400, "缺少必要参数")
+                return
+                
+            if cmd['switch'] not in [0, 1]:
+                self._send_response(400, "开关状态必须是0或1")
+                return
+                
+            dev_euis = cmd['stakeNo'].split(',')
+            for dev_eui in dev_euis:
+                data = bytes([cmd['switch']])
+                send_downlink(dev_eui, 14, data)
+                
+        self._send_response(200, "Switch setting applied successfully.")
+        
+    def _send_response(self, code, message):
         """发送JSON格式的响应"""
         response = {
-            "msg": msg,
-            "code": code
+            "code": code,
+            "message": message
         }
         self.send_response(code)
         self.send_header('Content-type', 'application/json')
