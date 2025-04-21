@@ -133,6 +133,35 @@
 }
 ```
 
+#### 6. 整体控制设置
+- 请求格式：`POST /api/induction-lights/overall-setting`
+- 请求体示例：
+```json
+[
+    {
+        "stakeNo": "1100000000000001,1100000000000002",
+        "color": 1,
+        "frequency": 30,
+        "level": 500,
+        "manner": 1
+    },
+    {
+        "stakeNo": "1100000000000003,1100000000000004",
+        "color": 0,
+        "frequency": 60,
+        "level": 4000,
+        "manner": 0
+    }
+]
+```
+- 响应格式：
+```json
+{
+    "code": 200,
+    "message": "Overall setting applied successfully."
+}
+```
+
 ### 错误响应
 所有接口在参数错误或请求失败时会返回如下格式的响应：
 ```json

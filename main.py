@@ -45,6 +45,7 @@ def send_downlink(dev_eui, f_port, data_bytes=None):
         12: 设置是否闪烁
         13: 设置亮度
         14: 设备开关控制
+        15: 整体控制（颜色、频率、亮度、亮灯方式）
         20: 车辆通过状态（红色+7000亮度+120Hz)
         21: 车辆离开状态（黄色+1000亮度+常亮）
     :param data_bytes: 数据载荷,对于f_port=20/21可以为None
@@ -219,6 +220,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._handle_set_manner(commands)
             elif path == '/api/induction-lights/set-switch':
                 self._handle_set_switch(commands)
+            elif path == '/api/induction-lights/overall-setting':
+                self._handle_overall_setting(commands)
             else:
                 self._send_response(404, "不支持的请求路径")
                 
@@ -320,6 +323,56 @@ class Handler(BaseHTTPRequestHandler):
                 send_downlink(dev_eui, 14, data)
                 
         self._send_response(200, "Switch setting applied successfully.")
+        
+    def _handle_overall_setting(self, commands):
+        """处理整体设置请求"""
+        for cmd in commands:
+            if not all(k in cmd for k in ['stakeNo', 'color', 'frequency', 'level', 'manner']):
+                self._send_response(400, "缺少必要参数")
+                return
+                
+            # 验证颜色参数
+            if cmd['color'] not in [0, 1]:
+                self._send_response(400, "颜色值必须是0或1")
+                return
+                
+            # 验证频率参数
+            if cmd['frequency'] not in [30, 60, 120]:
+                self._send_response(400, "频率值必须是30、60或120")
+                return
+                
+            # 验证亮度参数
+            if cmd['level'] not in [500, 1000, 2000, 4000, 7000]:
+                self._send_response(400, "亮度值必须是500、1000、2000、4000或7000")
+                return
+                
+            # 验证亮灯方式参数
+            if cmd['manner'] not in [0, 1]:
+                self._send_response(400, "亮灯方式必须是0或1")
+                return
+                
+            # 构建payload
+            # 第一个字节：颜色
+            color_byte = bytes([cmd['color']])
+            # 第二个字节：频率
+            freq_map = {30: 0x1E, 60: 0x3C, 120: 0x78}
+            freq_byte = bytes([freq_map[cmd['frequency']]])
+            # 第三、四字节：亮度
+            high_byte = (cmd['level'] >> 8) & 0xFF
+            low_byte = cmd['level'] & 0xFF
+            level_bytes = bytes([high_byte, low_byte])
+            # 第五个字节：亮灯方式
+            manner_byte = bytes([cmd['manner']])
+            
+            # 组合所有字节
+            payload = color_byte + freq_byte + level_bytes + manner_byte
+            
+            # 处理多个设备编号
+            dev_euis = cmd['stakeNo'].split(',')
+            for dev_eui in dev_euis:
+                send_downlink(dev_eui, 15, payload)
+                
+        self._send_response(200, "Overall setting applied successfully.")
         
     def _send_response(self, code, message):
         """发送JSON格式的响应"""
