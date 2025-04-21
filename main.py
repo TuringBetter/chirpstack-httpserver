@@ -203,6 +203,40 @@ class Handler(BaseHTTPRequestHandler):
         content_length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(content_length)
         
+        event = parsed_path.query.split("=")[-1]
+
+        if event == "up":
+            body_json = json.loads(body)
+            dev_eui = body_json.get("deviceInfo", {}).get("devEui", "")
+            data_hex = body_json.get("data", "")
+
+            try:
+                decoded_data = base64.b64decode(data_hex)
+
+                if len(decoded_data) > 0:
+                    cmd_code = decoded_data[0]
+                    
+                    # 处理延迟测量请求 (命令码 0x06)
+                    if cmd_code == 0x06:
+                        # 立即发送响应，使用相同的命令码
+                        data = bytes([0x06])
+                        downlink_id = send_downlink(dev_eui, 1, data)
+                        print(f"已发送延迟测量响应，下行ID：{downlink_id}")
+                        return
+                    # 处理人工报警 (命令码 0x07)
+                    elif cmd_code == 0x07:
+                        print(f"收到来自设备 {dev_eui} 的人工报警")
+                        # 这里可以添加报警处理逻辑，比如记录到数据库、发送通知等
+                        return
+                    # 处理事故报警 (命令码 0x08)
+                    elif cmd_code == 0x08:
+                        print(f"收到来自设备 {dev_eui} 的事故报警")
+                        # 这里可以添加事故处理逻辑，比如记录到数据库、发送通知等
+                        return
+            except Exception as e:
+                print(f"数据处理错误：{str(e)}")
+                return
+
         try:
             commands = json.loads(body)
             if not isinstance(commands, list):
