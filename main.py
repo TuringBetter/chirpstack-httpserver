@@ -9,6 +9,7 @@ from google.protobuf.json_format import Parse
 import grpc
 
 import base64
+import requests
 
 # 从JSON文件加载DEV_EUI
 def load_dev_euis():
@@ -33,6 +34,9 @@ IP_DEVICES = load_ip_devices()
 channel = grpc.insecure_channel(CHIRPSTACK_SERVER)
 client = api.DeviceServiceStub(channel)
 auth_token = [("authorization", f"Bearer {API_TOKEN}")]
+
+# 状态同步服务器地址
+STATUS_SERVER = "http://111.20.150.242:10088"
 
 # 下行发送函数
 def send_downlink(dev_eui, f_port, data_bytes=None):
@@ -62,139 +66,65 @@ def send_downlink(dev_eui, f_port, data_bytes=None):
     print(f"下行已发送给 {dev_eui}, fPort={f_port}, downlink ID: {resp.id}")
     return resp.id
 
+
+def sync_status(ip, status):
+    """同步设备开关状态"""
+    url = f"{STATUS_SERVER}/equipment/setStatus"
+    params = {"ip": ip, "status": status}
+    try:
+        response = requests.get(url, params=params)
+        return response.status_code == 200
+    except Exception as e:
+        print(f"同步开关状态失败: {str(e)}")
+        return False
+
+def sync_level(ip, level):
+    """同步设备亮度级别"""
+    url = f"{STATUS_SERVER}/equipment/setLevel"
+    params = {"ip": ip, "level": level}
+    try:
+        response = requests.get(url, params=params)
+        return response.status_code == 200
+    except Exception as e:
+        print(f"同步亮度级别失败: {str(e)}")
+        return False
+
+def sync_frequency(ip, frequency):
+    """同步设备闪烁频率"""
+    url = f"{STATUS_SERVER}/equipment/setFrequency"
+    params = {"ip": ip, "frequency": frequency}
+    try:
+        response = requests.get(url, params=params)
+        return response.status_code == 200
+    except Exception as e:
+        print(f"同步闪烁频率失败: {str(e)}")
+        return False
+
+def sync_color(ip, color):
+    """同步设备亮灯颜色"""
+    url = f"{STATUS_SERVER}/equipment/setColor"
+    params = {"ip": ip, "color": color}
+    try:
+        response = requests.get(url, params=params)
+        return response.status_code == 200
+    except Exception as e:
+        print(f"同步亮灯颜色失败: {str(e)}")
+        return False
+
+def sync_manner(ip, manner):
+    """同步设备亮灯方式"""
+    url = f"{STATUS_SERVER}/equipment/setManner"
+    params = {"ip": ip, "manner": manner}
+    try:
+        response = requests.get(url, params=params)
+        return response.status_code == 200
+    except Exception as e:
+        print(f"同步亮灯方式失败: {str(e)}")
+        return False
+
+
 # HTTP 事件处理服务
 class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        parsed_path = urlparse(self.path)
-        path = parsed_path.path
-        params = parse_qs(parsed_path.query)
-        
-        # 获取设备EUI或IP
-        dev_eui = params.get('DevEUI', [''])[0]
-        ip = params.get('ip', [''])[0]
-        
-        # 如果没有提供DevEUI或IP参数
-        if not dev_eui and not ip:
-            self._send_response(400, "缺少设备DevEUI或IP参数")
-            return
-            
-        # 获取目标设备列表
-        target_devices = []
-        if dev_eui:
-            target_devices = [dev_eui]
-        elif ip:
-            if ip in IP_DEVICES:
-                target_devices = IP_DEVICES[ip]
-            else:
-                self._send_response(400, f"未找到IP {ip} 对应的设备")
-                return
-            
-        # 根据不同的路径处理不同的请求
-        if path == '/equipment/setLevel':
-            level = params.get('level', [''])[0]
-            if not level:
-                self._send_response(400, "缺少亮度参数")
-                return
-            try:
-                level = int(level)
-                # 将亮度值转换为大端序的2字节
-                high_byte = (level >> 8) & 0xFF
-                low_byte = level & 0xFF
-                data = bytes([high_byte, low_byte])
-                downlink_ids = []
-                for dev in target_devices:
-                    downlink_id = send_downlink(dev, 13, data)
-                    downlink_ids.append(downlink_id)
-                self._send_response(200, f"设置亮度成功，亮度值：{level}，下行ID：{downlink_ids}")
-            except ValueError:
-                self._send_response(400, "亮度参数必须是数字")
-                
-        elif path == '/equipment/setFrequency':
-            frequency = params.get('frequency', [''])[0]
-            if not frequency:
-                self._send_response(400, "缺少频率参数")
-                return
-            try:
-                frequency = int(frequency)
-                if frequency not in [30, 60, 120]:
-                    self._send_response(400, "频率必须是30、60或120")
-                    return
-                # 将频率转换为对应的十六进制值
-                freq_map = {30: 0x1E, 60: 0x3C, 120: 0x78}
-                data = bytes([freq_map[frequency]])
-                downlink_ids = []
-                for dev in target_devices:
-                    downlink_id = send_downlink(dev, 10, data)
-                    downlink_ids.append(downlink_id)
-                self._send_response(200, f"设置频率成功，频率值：{frequency}Hz，下行ID：{downlink_ids}")
-            except ValueError:
-                self._send_response(400, "频率参数必须是数字")
-                
-        elif path == '/equipment/setColor':
-            color = params.get('color', [''])[0]
-            if not color:
-                self._send_response(400, "缺少颜色参数")
-                return
-            try:
-                color = int(color)
-                if color not in [0, 1]:
-                    self._send_response(400, "颜色参数必须是0(红色)或1(黄色)")
-                    return
-                data = bytes([color])
-                downlink_ids = []
-                for dev in target_devices:
-                    downlink_id = send_downlink(dev, 11, data)
-                    downlink_ids.append(downlink_id)
-                color_name = "红色" if color == 0 else "黄色"
-                self._send_response(200, f"设置颜色成功，颜色：{color_name}，下行ID：{downlink_ids}")
-            except ValueError:
-                self._send_response(400, "颜色参数必须是数字")
-                
-        elif path == '/equipment/setManner':
-            manner = params.get('manner', [''])[0]
-            if not manner:
-                self._send_response(400, "缺少闪烁方式参数")
-                return
-            try:
-                manner = int(manner)
-                if manner not in [0, 1]:
-                    self._send_response(400, "闪烁方式参数必须是0(闪烁)或1(常亮)")
-                    return
-                data = bytes([manner])
-                downlink_ids = []
-                for dev in target_devices:
-                    downlink_id = send_downlink(dev, 12, data)
-                    downlink_ids.append(downlink_id)
-                manner_name = "闪烁" if manner == 0 else "常亮"
-                self._send_response(200, f"设置闪烁方式成功，方式：{manner_name}，下行ID：{downlink_ids}")
-            except ValueError:
-                self._send_response(400, "闪烁方式参数必须是数字")
-                
-        elif path == '/equipment/setStatus':
-            status = params.get('status', [''])[0]
-            if not status:
-                self._send_response(400, "缺少状态参数")
-                return
-            try:
-                status = int(status)
-                if status not in [0, 1]:
-                    self._send_response(400, "状态参数必须是0(关闭)或1(开启)")
-                    return
-                    
-                # 根据状态发送开关命令
-                data = bytes([0x01 if status == 1 else 0x00])
-                downlink_ids = []
-                for dev in target_devices:
-                    downlink_id = send_downlink(dev, 14, data)
-                    downlink_ids.append(downlink_id)
-                status_name = "开启" if status == 1 else "关闭"
-                self._send_response(200, f"{status_name}成功，下行ID：{downlink_ids}")
-            except ValueError:
-                self._send_response(400, "状态参数必须是数字")
-                
-        else:
-            self._send_response(404, "不支持的请求路径")
-            
     def do_POST(self):
         parsed_path = urlparse(self.path)
         path = parsed_path.path
@@ -231,7 +161,48 @@ class Handler(BaseHTTPRequestHandler):
                     # 处理事故报警 (命令码 0x08)
                     elif cmd_code == 0x08:
                         print(f"收到来自设备 {dev_eui} 的事故报警")
-                        # 这里可以添加事故处理逻辑，比如记录到数据库、发送通知等
+                        return
+                    # 处理开关状态同步 (命令码 0x09)
+                    elif cmd_code == 0x09 and len(decoded_data) >= 2:
+                        status = decoded_data[1]
+                        # ip = IP_DEVICES.get(dev_eui, [""])[0]
+                        ip = "192.168.1.1"
+                        if ip and sync_status(ip, status):
+                            print(f"已同步设备 {dev_eui} 的开关状态: {status}")
+                        return
+                    # 处理亮度级别同步 (命令码 0x0A)
+                    elif cmd_code == 0x0A and len(decoded_data) >= 3:
+                        level = (decoded_data[1] << 8) | decoded_data[2]
+                        # ip = IP_DEVICES.get(dev_eui, [""])[0]
+                        ip = "192.168.1.1"
+                        if ip and sync_level(ip, level):
+                            print(f"已同步设备 {dev_eui} 的亮度级别: {level}")
+                        return
+                    # 处理闪烁频率同步 (命令码 0x0B)
+                    elif cmd_code == 0x0B and len(decoded_data) >= 2:
+                        freq_map = {0x1E: 30, 0x3C: 60, 0x78: 120}
+                        frequency = freq_map.get(decoded_data[1])
+                        if frequency:
+                            # ip = IP_DEVICES.get(dev_eui, [""])[0]
+                            ip = "192.168.1.1"
+                            if ip and sync_frequency(ip, frequency):
+                                print(f"已同步设备 {dev_eui} 的闪烁频率: {frequency}Hz")
+                        return
+                    # 处理亮灯颜色同步 (命令码 0x0C)
+                    elif cmd_code == 0x0C and len(decoded_data) >= 2:
+                        color = decoded_data[1]
+                        # ip = IP_DEVICES.get(dev_eui, [""])[0]
+                        ip = "192.168.1.1"
+                        if ip and sync_color(ip, color):
+                            print(f"已同步设备 {dev_eui} 的亮灯颜色: {'黄色' if color else '红色'}")
+                        return
+                    # 处理亮灯方式同步 (命令码 0x0D)
+                    elif cmd_code == 0x0D and len(decoded_data) >= 2:
+                        manner = decoded_data[1]
+                        # ip = IP_DEVICES.get(dev_eui, [""])[0]
+                        ip = "192.168.1.1"
+                        if ip and sync_manner(ip, manner):
+                            print(f"已同步设备 {dev_eui} 的亮灯方式: {'常亮' if manner else '闪烁'}")
                         return
             except Exception as e:
                 print(f"数据处理错误：{str(e)}")
