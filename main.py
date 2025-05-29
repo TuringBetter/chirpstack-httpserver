@@ -1,13 +1,10 @@
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 import json
-
 from chirpstack_api import integration
 from chirpstack_api import api
-
 from google.protobuf.json_format import Parse
 import grpc
-
 import base64
 import requests
 
@@ -65,7 +62,6 @@ def send_downlink(dev_eui, f_port, data_bytes=None):
     resp = client.Enqueue(req, metadata=auth_token)
     print(f"下行已发送给 {dev_eui}, fPort={f_port}, downlink ID: {resp.id}")
     return resp.id
-
 
 def sync_status(ip, status):
     """同步设备开关状态"""
@@ -135,6 +131,7 @@ class Handler(BaseHTTPRequestHandler):
         
         event = parsed_path.query.split("=")[-1]
 
+        # 由终端发来的上行数据
         if event == "up":
             body_json = json.loads(body)
             dev_eui = body_json.get("deviceInfo", {}).get("devEui", "")
@@ -204,10 +201,12 @@ class Handler(BaseHTTPRequestHandler):
                         if ip and sync_manner(ip, manner):
                             print(f"已同步设备 {dev_eui} 的亮灯方式: {'常亮' if manner else '闪烁'}")
                         return
+                return
             except Exception as e:
                 print(f"数据处理错误：{str(e)}")
                 return
 
+        # 由外部系统发来的请求
         try:
             commands = json.loads(body)
             if not isinstance(commands, list):
@@ -227,6 +226,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._handle_set_switch(commands)
             elif path == '/api/induction-lights/overall-setting':
                 self._handle_overall_setting(commands)
+            elif path == '/api/induction-flashing-lights/set-switch':
+                self._handle_flashing_lights(commands)
             else:
                 self._send_response(404, "不支持的请求路径")
                 
@@ -378,7 +379,26 @@ class Handler(BaseHTTPRequestHandler):
                 send_downlink(dev_eui, 15, payload)
                 
         self._send_response(200, "Overall setting applied successfully.")
-        
+
+    def _handle_flashing_lights(self,commands):
+        """处理设置爆闪灯请求"""
+        print("flashing_lights...")
+        for cmd in commands:
+            if not all(k in cmd for k in ['stakeNo', 'switch']):
+                self._send_response(400, "缺少必要参数")
+                return
+                
+            if cmd['switch'] not in [0, 1]:
+                self._send_response(400, "开关状态必须是0或1")
+                return
+            
+            fPort = 17 if cmd['switch'] == 0 else 16
+            data=bytes([cmd['switch']])
+            dev_euis = cmd['stakeNo'].split(',')
+            for dev_eui in dev_euis:
+                send_downlink(dev_eui, fPort,data)
+                
+        self._send_response(200, "Switch setting applied successfully.")
     def _send_response(self, code, message):
         """发送JSON格式的响应"""
         response = {
