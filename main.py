@@ -7,6 +7,7 @@ from google.protobuf.json_format import Parse
 import grpc
 import base64
 import requests
+from datetime import datetime
 
 # 从JSON文件加载DEV_EUI
 def load_dev_euis():
@@ -118,6 +119,37 @@ def sync_manner(ip, manner):
         print(f"同步亮灯方式失败: {str(e)}")
         return False
 
+def send_warn_info(stake_no, warn_type):
+    """发送报警信息到状态服务器"""
+    url = f"{STATUS_SERVER}/warn/warnInfo"
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    params = {
+        "stakeNo": stake_no,
+        "eventDate": current_time,
+        "warnType": warn_type
+    }
+    try:
+        response = requests.get(url, params=params)
+        return response.status_code == 200
+    except Exception as e:
+        print(f"发送报警信息失败: {str(e)}")
+        return False
+
+def send_heartbeat(stake_no):
+    """发送心跳信息到状态服务器"""
+    url = f"{STATUS_SERVER}/equipmentfailure/sendBeat"
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    data = {
+        "stakeNo": stake_no,
+        "updateDate": current_time,
+        "loraStatus": "Online"
+    }
+    try:
+        response = requests.post(url, json=data)
+        return response.status_code == 200
+    except Exception as e:
+        print(f"发送心跳信息失败: {str(e)}")
+        return False
 
 # HTTP 事件处理服务
 class Handler(BaseHTTPRequestHandler):
@@ -153,12 +185,21 @@ class Handler(BaseHTTPRequestHandler):
                     # 处理人工报警 (命令码 0x07)
                     elif cmd_code == 0x07:
                         print(f"收到来自设备 {dev_eui} 的人工报警")
-                        # 这里可以添加报警处理逻辑，比如记录到数据库、发送通知等
+                        if send_warn_info(dev_eui, 1):
+                            print(f"已成功转发人工报警信息到状态服务器")
                         return
                     # 处理事故报警 (命令码 0x08)
                     elif cmd_code == 0x08:
                         print(f"收到来自设备 {dev_eui} 的事故报警")
+                        if send_warn_info(dev_eui, 2):
+                            print(f"已成功转发事故报警信息到状态服务器")
                         return
+                    elif cmd_code == 0x09:
+                        print(f"收到来自设备 {dev_eui} 的心跳数据")
+                        if send_heartbeat(dev_eui):
+                            print(f"已成功转发心跳信息到状态服务器")
+                        return
+                    '''
                     # 处理开关状态同步 (命令码 0x09)
                     elif cmd_code == 0x09 and len(decoded_data) >= 2:
                         status = decoded_data[1]
@@ -201,6 +242,7 @@ class Handler(BaseHTTPRequestHandler):
                         if ip and sync_manner(ip, manner):
                             print(f"已同步设备 {dev_eui} 的亮灯方式: {'常亮' if manner else '闪烁'}")
                         return
+                    '''
                 return
             except Exception as e:
                 print(f"数据处理错误：{str(e)}")
@@ -399,6 +441,7 @@ class Handler(BaseHTTPRequestHandler):
                 send_downlink(dev_eui, fPort,data)
                 
         self._send_response(200, "Switch setting applied successfully.")
+
     def _send_response(self, code, message):
         """发送JSON格式的响应"""
         response = {
