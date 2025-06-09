@@ -3,3 +3,4 @@ DEV_EUI.json
 ip_devices.json
 README.md
 chirpstack_httpserver.service
+__pycache__
