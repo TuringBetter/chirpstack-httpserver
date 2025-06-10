@@ -1,5 +1,6 @@
 # config.py
 import json
+from logger import setup_logger
 
 class Config:
     """集中管理所有配置"""
@@ -24,12 +25,13 @@ class Config:
     @staticmethod
     def load_json(filepath):
         """从JSON文件加载数据"""
+        logger = setup_logger('Config')
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except FileNotFoundError:
-            print(f"错误: 配置文件 {filepath} 未找到。")
+            logger.error(f"错误: 配置文件 {filepath} 未找到。")
             return {}
         except json.JSONDecodeError:
-            print(f"错误: 配置文件 {filepath} 格式无效。")
+            logger.error(f"错误: 配置文件 {filepath} 格式无效。")
             return {}

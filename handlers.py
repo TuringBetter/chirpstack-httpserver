@@ -2,12 +2,14 @@
 import json
 import base64
 from config import Config
+from logger import setup_logger
 
 class UplinkHandler:
     """处理来自设备的上行数据"""
     def __init__(self, chirpstack_client, status_server_client):
         self.chirpstack_client = chirpstack_client
         self.status_server_client = status_server_client
+        self.logger = setup_logger('UplinkHandler')
 
     def process(self, body):
         try:
@@ -34,31 +36,32 @@ class UplinkHandler:
             if handler:
                 handler(dev_eui, decoded_data)
             else:
-                print(f"收到未知命令码 {hex(cmd_code)} from {dev_eui}")
+                self.logger.warning(f"收到未知命令码 {hex(cmd_code)} from {dev_eui}")
 
         except (json.JSONDecodeError, KeyError, IndexError, base64.binascii.Error) as e:
-            print(f"处理上行数据时出错: {e}")
+            self.logger.error(f"处理上行数据时出错: {e}")
 
     def handle_latency_measure(self, dev_eui, _):
-        print(f"收到来自 {dev_eui} 的延迟测量请求，正在响应...")
+        self.logger.info(f"收到来自 {dev_eui} 的延迟测量请求，正在响应...")
         self.chirpstack_client.send_downlink(dev_eui, 1, bytes([0x06]))
 
     def handle_manual_alarm(self, dev_eui, _):
-        print(f"收到来自 {dev_eui} 的人工报警")
+        self.logger.info(f"收到来自 {dev_eui} 的人工报警")
         self.status_server_client.send_warn_info(dev_eui, 1)
 
     def handle_accident_alarm(self, dev_eui, _):
-        print(f"收到来自 {dev_eui} 的事故报警")
+        self.logger.info(f"收到来自 {dev_eui} 的事故报警")
         self.status_server_client.send_warn_info(dev_eui, 2)
 
     def handle_heartbeat(self, dev_eui, _):
-        print(f"收到来自 {dev_eui} 的心跳")
+        self.logger.info(f"收到来自 {dev_eui} 的心跳")
         self.status_server_client.send_heartbeat(dev_eui)
 
 class APIHandler:
     """处理来自外部系统的API请求"""
     def __init__(self, chirpstack_client):
         self.chirpstack_client = chirpstack_client
+        self.logger = setup_logger('APIHandler')
 
     def _api_handler_decorator(func):
         """处理API请求通用逻辑的装饰器"""
@@ -78,7 +81,7 @@ class APIHandler:
             except json.JSONDecodeError:
                 handler_instance._send_response(400, "无效的JSON格式")
             except Exception as e:
-                print(f"API处理时发生内部错误: {e}")
+                self.logger.error(f"API处理时发生内部错误: {e}")
                 handler_instance._send_response(500, f"服务器内部错误: {str(e)}")
         return wrapper
 
