@@ -176,16 +176,3 @@ def overall_setting(commands: List[OverallSettingCommand]):
         for dev_eui in cmd.stake_no.split(','):
             chirpstack_client.send_downlink(dev_eui, 15, payload)
     return {"message": "整体控制指令已发送"}
-
-
-# --- 爆闪灯控制API ---
-FLASHING_LIGHTS_TAGS = ["爆闪灯控制"]
-
-@app.post("/api/induction-flashing-lights/set-switch", summary="爆闪灯开关", tags=FLASHING_LIGHTS_TAGS)
-def set_flashing_lights_switch(commands: List[SetSwitchCommand]):
-    for cmd in commands:
-        f_port = 17 if cmd.switch == 0 else 16  # 关为17，开为16
-        data = bytes([cmd.switch])
-        for dev_eui in cmd.stake_no.split(','):
-            chirpstack_client.send_downlink(dev_eui, f_port, data)
-    return {"message": "爆闪灯开关指令已发送"}
