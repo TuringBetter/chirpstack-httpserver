@@ -5,3 +5,4 @@ README.md
 chirpstack_httpserver.service
 __pycache__
 app.log
+chirpstack_example.py

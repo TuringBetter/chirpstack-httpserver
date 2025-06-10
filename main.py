@@ -3,7 +3,7 @@ import base64
 import json
 from typing import List, Optional
 
-from fastapi import FastAPI, Body, HTTPException
+from fastapi import FastAPI, Query, Body, HTTPException
 from pydantic import BaseModel, Field
 
 # 从其他模块导入我们已经写好的类
@@ -81,23 +81,26 @@ class OverallSettingCommand(BaseCommand):
 
 # --- 3. 定义API端点 (Path Operations) ---
 
-@app.get("/", summary="服务根节点", tags=["通用"])
-def read_root():
-    """返回服务状态信息"""
-    return {"status": "ok", "message": "欢迎使用智能交通灯LoRa控制服务"}
+# @app.get("/", summary="服务根节点", tags=["通用"])
+# def read_root():
+#     """返回服务状态信息"""
+#     return {"status": "ok", "message": "欢迎使用智能交通灯LoRa控制服务"}
 
-@app.post("/integration/uplink", summary="接收ChirpStack上行数据", tags=["ChirpStack集成"])
-def handle_uplink(event: UplinkEvent, event_type: str = Body(..., alias='event')):
-    """
-    此端点用于接收ChirpStack HTTP Integration推送的上行数据。
-    在ChirpStack中，请将Uplink data URL设置为 `http://<your_server_ip>:10088/integration/uplink`。
-    """
+@app.post("/", summary="接收ChirpStack上行数据", tags=["ChirpStack集成"])
+def handle_uplink(
+    # 这个参数来自 Request Body，FastAPI会自动处理
+    uplink_data: UplinkEvent,
+    event_type: str = Query(..., alias='event',description="事件类型，由ChirpStack在URL中提供")
+    ):
+
+    print("here")
+
     if event_type != "up":
         return {"status": "ignored", "reason": "不是上行事件"}
 
     try:
-        dev_eui = event.device_info.dev_eui
-        decoded_data = base64.b64decode(event.data)
+        dev_eui = uplink_data.device_info.dev_eui
+        decoded_data = base64.b64decode(uplink_data.data)
         if not decoded_data:
             return {"status": "ignored", "reason": "空数据载荷"}
 
