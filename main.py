@@ -3,7 +3,7 @@ import base64
 import json
 from typing import List, Optional
 
-from fastapi import FastAPI, Query, Body, HTTPException
+from fastapi import FastAPI, Query, HTTPException
 from pydantic import BaseModel, Field
 
 # 从其他模块导入我们已经写好的类
