@@ -81,10 +81,10 @@ class OverallSettingCommand(BaseCommand):
 
 # --- 3. 定义API端点 (Path Operations) ---
 
-# @app.get("/", summary="服务根节点", tags=["通用"])
-# def read_root():
-#     """返回服务状态信息"""
-#     return {"status": "ok", "message": "欢迎使用智能交通灯LoRa控制服务"}
+@app.get("/", summary="服务根节点", tags=["通用"])
+def read_root():
+    """返回服务状态信息"""
+    return {"status": "ok", "message": "欢迎使用智能交通灯LoRa控制服务"}
 
 @app.post("/integration/uplink", summary="接收ChirpStack上行数据", tags=["ChirpStack集成"])
 def handle_uplink(
