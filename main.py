@@ -199,50 +199,6 @@ class Handler(BaseHTTPRequestHandler):
                         if send_heartbeat(dev_eui):
                             print(f"已成功转发心跳信息到状态服务器")
                         return
-                    '''
-                    # 处理开关状态同步 (命令码 0x09)
-                    elif cmd_code == 0x09 and len(decoded_data) >= 2:
-                        status = decoded_data[1]
-                        # ip = IP_DEVICES.get(dev_eui, [""])[0]
-                        ip = "192.168.1.1"
-                        if ip and sync_status(ip, status):
-                            print(f"已同步设备 {dev_eui} 的开关状态: {status}")
-                        return
-                    # 处理亮度级别同步 (命令码 0x0A)
-                    elif cmd_code == 0x0A and len(decoded_data) >= 3:
-                        level = (decoded_data[1] << 8) | decoded_data[2]
-                        # ip = IP_DEVICES.get(dev_eui, [""])[0]
-                        ip = "192.168.1.1"
-                        if ip and sync_level(ip, level):
-                            print(f"已同步设备 {dev_eui} 的亮度级别: {level}")
-                        return
-                    # 处理闪烁频率同步 (命令码 0x0B)
-                    elif cmd_code == 0x0B and len(decoded_data) >= 2:
-                        freq_map = {0x1E: 30, 0x3C: 60, 0x78: 120}
-                        frequency = freq_map.get(decoded_data[1])
-                        if frequency:
-                            # ip = IP_DEVICES.get(dev_eui, [""])[0]
-                            ip = "192.168.1.1"
-                            if ip and sync_frequency(ip, frequency):
-                                print(f"已同步设备 {dev_eui} 的闪烁频率: {frequency}Hz")
-                        return
-                    # 处理亮灯颜色同步 (命令码 0x0C)
-                    elif cmd_code == 0x0C and len(decoded_data) >= 2:
-                        color = decoded_data[1]
-                        # ip = IP_DEVICES.get(dev_eui, [""])[0]
-                        ip = "192.168.1.1"
-                        if ip and sync_color(ip, color):
-                            print(f"已同步设备 {dev_eui} 的亮灯颜色: {'黄色' if color else '红色'}")
-                        return
-                    # 处理亮灯方式同步 (命令码 0x0D)
-                    elif cmd_code == 0x0D and len(decoded_data) >= 2:
-                        manner = decoded_data[1]
-                        # ip = IP_DEVICES.get(dev_eui, [""])[0]
-                        ip = "192.168.1.1"
-                        if ip and sync_manner(ip, manner):
-                            print(f"已同步设备 {dev_eui} 的亮灯方式: {'常亮' if manner else '闪烁'}")
-                        return
-                    '''
                 return
             except Exception as e:
                 print(f"数据处理错误：{str(e)}")
