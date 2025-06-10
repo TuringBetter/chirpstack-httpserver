@@ -86,7 +86,7 @@ class OverallSettingCommand(BaseCommand):
 #     """返回服务状态信息"""
 #     return {"status": "ok", "message": "欢迎使用智能交通灯LoRa控制服务"}
 
-@app.post("/", summary="接收ChirpStack上行数据", tags=["ChirpStack集成"])
+@app.post("/integration/uplink", summary="接收ChirpStack上行数据", tags=["ChirpStack集成"])
 def handle_uplink(
     # 这个参数来自 Request Body，FastAPI会自动处理
     uplink_data: UplinkEvent,
