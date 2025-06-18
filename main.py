@@ -93,7 +93,6 @@ def handle_uplink(
     event_type: str = Query(..., alias='event',description="事件类型，由ChirpStack在URL中提供")
     ):
 
-    print("here")
 
     if event_type != "up":
         return {"status": "ignored", "reason": "不是上行事件"}
