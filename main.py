@@ -48,9 +48,7 @@ def send_downlink(dev_eui, f_port, data_bytes=None):
         13: 设置亮度
         14: 设备开关控制
         15: 整体控制（颜色、频率、亮度、亮灯方式）
-        20: 车辆通过状态（红色+7000亮度+120Hz)
-        21: 车辆离开状态（黄色+1000亮度+常亮）
-    :param data_bytes: 数据载荷,对于f_port=20/21可以为None
+    :param data_bytes: 数据载荷
     """
     req = api.EnqueueDeviceQueueItemRequest()
     req.queue_item.dev_eui = dev_eui
@@ -64,60 +62,6 @@ def send_downlink(dev_eui, f_port, data_bytes=None):
     print(f"下行已发送给 {dev_eui}, fPort={f_port}, downlink ID: {resp.id}")
     return resp.id
 
-def sync_status(ip, status):
-    """同步设备开关状态"""
-    url = f"{STATUS_SERVER}/equipment/setStatus"
-    params = {"ip": ip, "status": status}
-    try:
-        response = requests.get(url, params=params)
-        return response.status_code == 200
-    except Exception as e:
-        print(f"同步开关状态失败: {str(e)}")
-        return False
-
-def sync_level(ip, level):
-    """同步设备亮度级别"""
-    url = f"{STATUS_SERVER}/equipment/setLevel"
-    params = {"ip": ip, "level": level}
-    try:
-        response = requests.get(url, params=params)
-        return response.status_code == 200
-    except Exception as e:
-        print(f"同步亮度级别失败: {str(e)}")
-        return False
-
-def sync_frequency(ip, frequency):
-    """同步设备闪烁频率"""
-    url = f"{STATUS_SERVER}/equipment/setFrequency"
-    params = {"ip": ip, "frequency": frequency}
-    try:
-        response = requests.get(url, params=params)
-        return response.status_code == 200
-    except Exception as e:
-        print(f"同步闪烁频率失败: {str(e)}")
-        return False
-
-def sync_color(ip, color):
-    """同步设备亮灯颜色"""
-    url = f"{STATUS_SERVER}/equipment/setColor"
-    params = {"ip": ip, "color": color}
-    try:
-        response = requests.get(url, params=params)
-        return response.status_code == 200
-    except Exception as e:
-        print(f"同步亮灯颜色失败: {str(e)}")
-        return False
-
-def sync_manner(ip, manner):
-    """同步设备亮灯方式"""
-    url = f"{STATUS_SERVER}/equipment/setManner"
-    params = {"ip": ip, "manner": manner}
-    try:
-        response = requests.get(url, params=params)
-        return response.status_code == 200
-    except Exception as e:
-        print(f"同步亮灯方式失败: {str(e)}")
-        return False
 
 def send_warn_info(stake_no, warn_type):
     """发送报警信息到状态服务器"""
