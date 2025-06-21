@@ -4,3 +4,5 @@ ip_devices.json
 README.md
 chirpstack_httpserver.service
 __pycache__
+*.log
+*_example*
